@@ -421,7 +421,7 @@ object LowRankGaussianProcess {
                                                       td: IndexedSeq[MultivariateNormalDistribution]): Double = {
     val dim = y.length / td.length
     val Ut = U.t
-    val Si = S.map(d => if (d > 1e-10) 1.0 / d else 0.0)
+    val Si = S.map(s => 1.0 / (s + 1e-7))
     val Ai = {
       val bi = new CSCMatrix.Builder[Double](y.length, y.length)
       for ((mvn, i) <- td.zipWithIndex) {
@@ -437,7 +437,7 @@ object LowRankGaussianProcess {
     val term1b = -y.t * (Ai * U * breeze.linalg.pinv(lrUpdate) * Ut * Ai) * y
 
     //logdet of Ky using the matrix determinant lemma
-    val term2a = breeze.linalg.logdet(lrUpdate)._2 + breeze.linalg.sum(S.map(math.log))
+    val term2a = breeze.linalg.logdet(lrUpdate)._2 + breeze.linalg.sum(S.map(s => math.log(s + 1e-7)))
     val term2b = td.map(mvn => breeze.linalg.logdet(mvn.cov)._2).sum
     //n log 2pi
     val term3 = y.length * math.log(math.Pi * 2)
