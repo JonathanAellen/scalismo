@@ -16,16 +16,16 @@
 package scalismo.statisticalmodel
 
 import breeze.linalg.svd.SVD
-import breeze.linalg.{diag, DenseMatrix, DenseVector}
+import breeze.linalg.{DenseMatrix, DenseVector, diag}
 import breeze.stats.distributions.Gaussian
 import scalismo.common.DiscreteField.vectorize
-import scalismo.common._
+import scalismo.common.*
 import scalismo.common.interpolation.{FieldInterpolator, NearestNeighborInterpolator}
-import scalismo.geometry._
+import scalismo.geometry.*
 import scalismo.image.StructuredPoints
 import scalismo.kernels.{DiscreteMatrixValuedPDKernel, MatrixValuedPDKernel}
-import scalismo.numerics.{PivotedCholesky, Sampler}
-import scalismo.statisticalmodel.DiscreteLowRankGaussianProcess.{Eigenpair => DiscreteEigenpair, _}
+import scalismo.numerics.{GramDiagonalize, PivotedCholesky, Sampler}
+import scalismo.statisticalmodel.DiscreteLowRankGaussianProcess.{Eigenpair as DiscreteEigenpair, *}
 import scalismo.statisticalmodel.LowRankGaussianProcess.Eigenpair
 import scalismo.statisticalmodel.NaNStrategy.NanIsNumericValue
 import scalismo.statisticalmodel.dataset.DataCollection
@@ -334,6 +334,22 @@ class DiscreteLowRankGaussianProcess[D: NDSpace, DDomain[DD] <: DiscreteDomain[D
     )
   }
 
+  /**
+   * realigns the model on the provided part of the domain. By default aligns over the translation and approximately
+   * over rotation as well. The rotation will always be calculated around the center of the provided ids. Rotations are
+   * around the cardinal directions.
+   * TODO make this available in point distribution model
+   *
+   * @param ids these define the parts of the domain that are aligned to
+   * @param onlyTranslation True if the rotation should be skipped. This makes the realignment exact
+   * @param skipRediagonalization True if a non diagonal basis should be returned. This is cheaper for drawing samples
+   * @return The resulting [[DiscreteLowRankGaussianProcess]] aligned on the provided instances of [[PointId]]
+   */
+  def realign(ids: IndexedSeq[PointId], onlyTranslation: Boolean = false, skipRediagonalization: Boolean = false)(implicit vectorizer: Vectorizer[Value]): DiscreteLowRankGaussianProcess[D, DDomain, Value] = {
+    //DiscreteLowRankGaussianProcess.realignment(this, ids, onlyTranslation, skipRediagonalization)
+    this
+  }
+
   protected[statisticalmodel] def instanceVector(alpha: DenseVector[Double]): DenseVector[Double] = {
     require(rank == alpha.size)
 
@@ -598,6 +614,43 @@ object DiscreteLowRankGaussianProcess {
 
     DiscreteMatrixValuedPDKernel(domain, cov, outputDim)
   }
+
+  def realignment[DDomain[D] <: DiscreteDomain[D]](model: DiscreteLowRankGaussianProcess[_3D, DDomain, EuclideanVector[_3D]], ids: IndexedSeq[PointId], onlyTranslation: Boolean = false, skipRediagonalization: Boolean = false): DiscreteLowRankGaussianProcess[_3D, DDomain, EuclideanVector[_3D]] = {
+    //TODO does a translation and approximate rotation alignment for the given dgp.
+    model.domain.pointSet.points.next().toBreezeVector
+    //TODO diagonalizes the gram matrix with efficient approach
+    
+    //TODO probably call a true computation function relying on basis matrix formulation
+    model
+  }
+
+  private def realignmentComputation(mean: DenseVector[Double], basis: DenseMatrix[Double], p: DenseMatrix[Double], s: DenseVector[Double], ids: IndexedSeq[Int], dim: Int, rediagonalize: Boolean, projectMean: Boolean): (DenseVector[Double], DenseMatrix[Double], DenseVector[Double]) = {
+    val x = for  // prepare indices
+        id <- ids
+        d <- 0 until dim
+      yield id*dim + d
+    // prepare the majority of the projection matrix
+    val px = p(x,::).toDenseMatrix
+    val ptpipt = breeze.linalg.pinv(px.t * px) * px.t
+
+    // performs the actual projection. batches all basis vectors
+    // p -> projection rank, n number of indexes*dim, r rank/cols of basis, N rows of basis
+    val alignedC = ptpipt * basis(x,::).toDenseMatrix  // pxn * nxr
+    val alignedEigf = basis - p * alignedC  // Nxr - Nxp * pxr
+    val alignedMean = if projectMean then  // if desired projects the mean vector as well
+      val alignedMc = ptpipt * mean  // same projection with r==1
+      mean - p * alignedMc
+    else mean
+
+    val (newbasis, news) = if rediagonalize then
+      GramDiagonalize.rediagonalizeGram(alignedEigf, s)
+    else
+      (alignedEigf, s)
+
+    (alignedMean, newbasis, news)
+  }
+
+  //def getTangentialSpeed[D: NDSpace, DDomain[D] <: DiscreteDomain[D], Value](model: DiscreteLowRankGaussianProcess[D, DDomain, Value], center: Point[D], )
 
 }
 

@@ -16,25 +16,20 @@
 package scalismo.statisticalmodel
 
 import java.net.URLDecoder
-import breeze.linalg.{DenseMatrix, DenseVector}
+import breeze.linalg.{DenseMatrix, DenseVector, rand}
 import breeze.stats.distributions.Gaussian
 import scalismo.ScalismoTestSuite
-import scalismo.common._
+import scalismo.common.*
 import scalismo.common.interpolation.{NearestNeighborInterpolator, NearestNeighborInterpolator3D}
-import scalismo.geometry.Point.implicits._
-import scalismo.geometry._
-import scalismo.image.{
-  DiscreteImageDomain,
-  DiscreteImageDomain1D,
-  DiscreteImageDomain2D,
-  DiscreteImageDomain3D,
-  StructuredPoints
-}
+import scalismo.geometry.Point.implicits.*
+import scalismo.geometry.*
+import scalismo.image.{DiscreteImageDomain, DiscreteImageDomain1D, DiscreteImageDomain2D, DiscreteImageDomain3D, StructuredPoints}
 import scalismo.io.StatisticalModelIO
 import scalismo.io.statisticalmodel.StatismoIO
 import scalismo.kernels.{DiagonalKernel, GaussianKernel, MatrixValuedPDKernel}
 import scalismo.numerics.PivotedCholesky.RelativeTolerance
 import scalismo.numerics.{GridSampler, UniformSampler}
+import scalismo.transformations.TranslationAfterRotation
 import scalismo.utils.Random
 
 import scala.language.implicitConversions
@@ -679,6 +674,47 @@ class GaussianProcessTests extends ScalismoTestSuite {
       }
     }
 
+    describe("when realigning a model") {
+      it("the translation aligned model should be exactly orthogonal to translations on the aligned ids.") {
+        import breeze.linalg._
+        val mat: DenseMatrix[Double] = DenseMatrix.eye[Double](3)
+        val vec: DenseVector[Double] = DenseVector.ones[Double](3)
+        val res: DenseMatrix[Double] = mat(breeze.linalg.*, ::) * vec
+        val arr = res.toArray.toIndexedSeq
+        println(arr)
+        val ssum: Double = arr.map(d => d-1.0).map(math.abs).sum()
+        ssum shouldBe 0.0 +- 1e-7
+        
+        
+        val f = Fixture
+        val dgp = f.discreteLowRankGp
+
+        val alignedDgp = dpg.realign(dgp.mean.pointsWithIds.map(t => t._2).toIndexedSeq, onlyTranslation = true)
+        val shifts = alignedDgp.klBasis.map(klp => {
+          val ef = klp.eigenfunction
+          ef.data.reduce(_+_).norm
+        })
+
+        shifts.sum() shouldBe 0.0 +- 1e-7
+      }
+
+      it("the rotation aligned model should exhibit no rotations on the aligned ids.") {
+        val f = Fixture
+        val dgp = f.discreteLowRankGp
+
+        val alignedDgp = dpg.realign(dgp.mean.pointsWithIds.map(t => t._2).toIndexedSeq)
+        val samples = (0 to 20).map(_ => alignedDgp.sample())
+        val rp = dgp.mean.domain.pointSet.points.map(_.toVector).reduce(_+_).map(d => d / dgp.mean.domain.pointSet.numberOfPoints)
+        val eye = DenseMatrix.eye[Double](3)
+        val rotations = samples.map(sample => {
+          val ldms = alignedDgp.mean.pointsWithIds.zip(sample.pointsWithIds).map(t => (t._1._1, t._2._1)).toIndexedSeq
+          val rigidTransform:TranslationAfterRotation[_3D] = scalismo.registration.LandmarkRegistration.rigid3DLandmarkRegistration(ldms,rp)
+          rigidTransform.rotation.rotationMatrix.toBreezeMatrix - eye
+        })
+
+        rotations.map(m => m.data.map(math.abs).sum()) shouldBe 0.0 +- 1e-7
+      }
+    }
   }
 
   describe("when comparing marginalLikelihoods") {
