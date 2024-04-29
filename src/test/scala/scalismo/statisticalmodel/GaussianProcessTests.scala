@@ -15,7 +15,7 @@
  */
 package scalismo.statisticalmodel
 
-import breeze.linalg.{DenseMatrix, DenseVector, rand}
+import breeze.linalg.{rand, DenseMatrix, DenseVector}
 import breeze.stats.distributions.Gaussian
 import scalismo.ScalismoTestSuite
 import scalismo.common.*
@@ -731,10 +731,12 @@ class GaussianProcessTests extends ScalismoTestSuite {
 
         val alignedDgp = dgp.realign(dgp.mean.pointsWithIds.map(t => t._2).toIndexedSeq, withRotation = true)
 
-        val shifts: IndexedSeq[Double] = alignedDgp.klBasis.map(klp => {
-          val ef = klp.eigenfunction
-          ef.data.reduce(_+_).norm
-        }).toIndexedSeq
+        val shifts: IndexedSeq[Double] = alignedDgp.klBasis
+          .map(klp => {
+            val ef = klp.eigenfunction
+            ef.data.reduce(_ + _).norm
+          })
+          .toIndexedSeq
         val res = shifts.sum
 
         res shouldBe 0.0 +- 1e-7
@@ -751,16 +753,23 @@ class GaussianProcessTests extends ScalismoTestSuite {
         val coef = (0 until 5).map(_ => this.random.scalaRandom.nextInt(100))
         val alignedDgp = dgp.realign(ids)
         val res = IndexedSeq(dgp, alignedDgp).map(model => {
-          val samples = coef.map(i => model.instance(DenseVector.tabulate[Double](model.rank) {j => if i==j then 0.1 else 0.0})).map(_ => model.sample())
+          val samples = coef
+            .map(i => model.instance(DenseVector.tabulate[Double](model.rank) { j => if i == j then 0.1 else 0.0 }))
+            .map(_ => model.sample())
           val rp = ids.map(id => model.mean.domain.pointSet.point(id).toVector).reduce(_ + _).map(d => d / ids.length)
           val rotations = samples.map(sample => {
-            val ldms = ids.map(id => (model.domain.pointSet.point(id) + model.mean.data(id.id), sample.domain.pointSet.point(id.id) + sample.data(id.id)))
-            val rigidTransform: TranslationAfterRotation[_3D] = scalismo.registration.LandmarkRegistration.rigid3DLandmarkRegistration(ldms, rp.toPoint)
+            val ldms = ids.map(id =>
+              (model.domain.pointSet.point(id) + model.mean.data(id.id),
+               sample.domain.pointSet.point(id.id) + sample.data(id.id)
+              )
+            )
+            val rigidTransform: TranslationAfterRotation[_3D] =
+              scalismo.registration.LandmarkRegistration.rigid3DLandmarkRegistration(ldms, rp.toPoint)
             rigidTransform.rotation.parameters
           })
           rotations.map(m => m.data.map(math.abs).sum).sum
         })
-        res(1) shouldBe < (res(0) * 0.9)
+        res(1) shouldBe <(res(0) * 0.9)
       }
     }
   }
