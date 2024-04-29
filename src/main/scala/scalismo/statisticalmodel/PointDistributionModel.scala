@@ -234,8 +234,11 @@ case class PointDistributionModel[D: NDSpace, DDomain[D] <: DiscreteDomain[D]](
   /**
    * realigns the [[DiscreteLowRankGaussianProcess]] and returns the resulting [[PointDistributionModel]]
    */
-  def realign(ids: IndexedSeq[PointId], onlyTranslation: Boolean = false, skipRediagonalization: Boolean = false): PointDistributionModel[D, DDomain] = {
-    new PointDistributionModel[D, DDomain](this.gp.realign(ids, onlyTranslation, skipRediagonalization))
+  def realign(ids: IndexedSeq[PointId],
+              withRotation: Boolean = true,
+              diagonalize: Boolean = true
+  ): PointDistributionModel[D, DDomain] = {
+    new PointDistributionModel[D, DDomain](this.gp.realign(ids, withRotation, diagonalize))
   }
 
 }

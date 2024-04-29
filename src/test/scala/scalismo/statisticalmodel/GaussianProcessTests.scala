@@ -676,43 +676,41 @@ class GaussianProcessTests extends ScalismoTestSuite {
 
     describe("when realigning a model") {
       it("the translation aligned model should be exactly orthogonal to translations on the aligned ids.") {
-        import breeze.linalg._
-        val mat: DenseMatrix[Double] = DenseMatrix.eye[Double](3)
-        val vec: DenseVector[Double] = DenseVector.ones[Double](3)
-        val res: DenseMatrix[Double] = mat(breeze.linalg.*, ::) * vec
-        val arr = res.toArray.toIndexedSeq
-        println(arr)
-        val ssum: Double = arr.map(d => d-1.0).map(math.abs).sum()
-        ssum shouldBe 0.0 +- 1e-7
-        
-        
         val f = Fixture
         val dgp = f.discreteLowRankGp
 
-        val alignedDgp = dpg.realign(dgp.mean.pointsWithIds.map(t => t._2).toIndexedSeq, onlyTranslation = true)
-        val shifts = alignedDgp.klBasis.map(klp => {
+        val alignedDgp = dgp.realign(dgp.mean.pointsWithIds.map(t => t._2).toIndexedSeq, withRotation = true)
+
+        val shifts: IndexedSeq[Double] = alignedDgp.klBasis.map(klp => {
           val ef = klp.eigenfunction
           ef.data.reduce(_+_).norm
-        })
+        }).toIndexedSeq
+        val res = shifts.sum
 
-        shifts.sum() shouldBe 0.0 +- 1e-7
+        res shouldBe 0.0 +- 1e-7
       }
 
-      it("the rotation aligned model should exhibit no rotations on the aligned ids.") {
+      it("the rotation aligned model should exhibit only small rotations on the aligned ids.") {
         val f = Fixture
         val dgp = f.discreteLowRankGp
 
-        val alignedDgp = dpg.realign(dgp.mean.pointsWithIds.map(t => t._2).toIndexedSeq)
-        val samples = (0 to 20).map(_ => alignedDgp.sample())
-        val rp = dgp.mean.domain.pointSet.points.map(_.toVector).reduce(_+_).map(d => d / dgp.mean.domain.pointSet.numberOfPoints)
-        val eye = DenseMatrix.eye[Double](3)
-        val rotations = samples.map(sample => {
-          val ldms = alignedDgp.mean.pointsWithIds.zip(sample.pointsWithIds).map(t => (t._1._1, t._2._1)).toIndexedSeq
-          val rigidTransform:TranslationAfterRotation[_3D] = scalismo.registration.LandmarkRegistration.rigid3DLandmarkRegistration(ldms,rp)
-          rigidTransform.rotation.rotationMatrix.toBreezeMatrix - eye
+        val ids = {
+          val sorted = dgp.mean.pointsWithIds.toIndexedSeq.sortBy(t => t._1.toArray.sum)
+          sorted.take(10).map(_._2)
+        }
+        val coef = (0 until 5).map(_ => this.random.scalaRandom.nextInt(100))
+        val alignedDgp = dgp.realign(ids)
+        val res = IndexedSeq(dgp, alignedDgp).map(model => {
+          val samples = coef.map(i => model.instance(DenseVector.tabulate[Double](model.rank) {j => if i==j then 0.1 else 0.0})).map(_ => model.sample())
+          val rp = ids.map(id => model.mean.domain.pointSet.point(id).toVector).reduce(_ + _).map(d => d / ids.length)
+          val rotations = samples.map(sample => {
+            val ldms = ids.map(id => (model.domain.pointSet.point(id) + model.mean.data(id.id), sample.domain.pointSet.point(id.id) + sample.data(id.id)))
+            val rigidTransform: TranslationAfterRotation[_3D] = scalismo.registration.LandmarkRegistration.rigid3DLandmarkRegistration(ldms, rp.toPoint)
+            rigidTransform.rotation.parameters
+          })
+          rotations.map(m => m.data.map(math.abs).sum).sum
         })
-
-        rotations.map(m => m.data.map(math.abs).sum()) shouldBe 0.0 +- 1e-7
+        res(1) shouldBe < (res(0) * 0.9)
       }
     }
   }
