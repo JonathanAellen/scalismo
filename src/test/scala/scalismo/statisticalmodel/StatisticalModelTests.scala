@@ -15,21 +15,20 @@
  */
 package scalismo.statisticalmodel
 
-import java.io.File
-import java.net.URLDecoder
-
 import breeze.linalg.DenseVector
 import breeze.stats.distributions.Gaussian
 import scalismo.ScalismoTestSuite
-import scalismo.geometry._
+import scalismo.geometry.*
 import scalismo.io.StatisticalModelIO
 import scalismo.io.statisticalmodel.StatismoIO
 import scalismo.mesh.MeshMetrics
 import scalismo.numerics.PivotedCholesky.NumberOfEigenfunctions
-import scalismo.transformations.{RigidTransformation, Rotation3D, Translation3D, TranslationAfterRotation3D}
 import scalismo.statisticalmodel.dataset.DataCollection
+import scalismo.transformations.{RigidTransformation, Rotation3D, Translation3D, TranslationAfterRotation3D}
 import scalismo.utils.Random
 
+import java.io.File
+import java.net.URLDecoder
 import scala.language.implicitConversions
 class StatisticalModelTests extends ScalismoTestSuite {
 
@@ -85,6 +84,17 @@ class StatisticalModelTests extends ScalismoTestSuite {
       val transformedModel = model.transform(rigidTransform)
       val newModel = transformedModel.transform(inverseTransform)
       compareModels(model, newModel)
+    }
+
+    it("yield equivalent result if using mean of posterior and MAP calculation while MAP is faster to compute") {
+      val path = getClass.getResource("/facemodel.h5").getPath
+      val model = StatisticalModelIO.readStatisticalMeshModel(new File(URLDecoder.decode(path, "UTF-8"))).get
+      val ref = model.referenceMesh
+      val data = ref.pointSet.pointIds.toIndexedSeq.map(id => (id, ref.pointSet.point(id)))
+      val mean = measureTime(model.posterior(data, 1.0).mean)
+      val map = measureTime(model.posteriorMean(data, 1.0))
+      map._2 should be < mean._2
+      assert(mean._1 == map._1)
     }
 
     it("can change the mean shape and still yield the same shape space") {
