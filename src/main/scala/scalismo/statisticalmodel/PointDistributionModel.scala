@@ -18,13 +18,14 @@ package scalismo.statisticalmodel
 import breeze.linalg.svd.SVD
 import breeze.linalg.{DenseMatrix, DenseVector}
 import breeze.numerics.sqrt
-import scalismo.common._
+import scalismo.common.*
 import scalismo.common.interpolation.{FieldInterpolator, NearestNeighborInterpolator}
-import scalismo.geometry._
+import scalismo.geometry.*
 import scalismo.numerics.PivotedCholesky
-import scalismo.transformations.{RigidTransformation, Transformation}
 import scalismo.statisticalmodel.DiscreteLowRankGaussianProcess.Eigenpair
+import scalismo.statisticalmodel.{Realignment, *}
 import scalismo.statisticalmodel.dataset.DataCollection
+import scalismo.transformations.{RigidTransformation, Transformation}
 import scalismo.utils.Random
 
 import scala.language.higherKinds

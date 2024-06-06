@@ -16,13 +16,12 @@
 package scalismo.statisticalmodel
 
 import breeze.linalg.svd.SVD
-import breeze.linalg.{diag, DenseMatrix, DenseVector}
+import breeze.linalg.{DenseMatrix, DenseVector, diag}
 import breeze.stats.distributions.Gaussian
-import scalismo.common.DiscreteField.vectorize
 import scalismo.common.*
+import scalismo.common.DiscreteField.vectorize
 import scalismo.common.interpolation.{FieldInterpolator, NearestNeighborInterpolator}
 import scalismo.geometry.*
-import scalismo.image.StructuredPoints
 import scalismo.kernels.{DiscreteMatrixValuedPDKernel, MatrixValuedPDKernel}
 import scalismo.numerics.{GramDiagonalize, PivotedCholesky, Sampler}
 import scalismo.statisticalmodel.DiscreteLowRankGaussianProcess.{Eigenpair as DiscreteEigenpair, *}
@@ -31,8 +30,8 @@ import scalismo.statisticalmodel.NaNStrategy.NanIsNumericValue
 import scalismo.statisticalmodel.dataset.DataCollection
 import scalismo.utils.{Memoize, Random}
 
-import scala.language.higherKinds
 import scala.collection.parallel.immutable.ParVector
+import scala.language.higherKinds
 
 /**
  * Represents a low-rank gaussian process, that is only defined at a finite, discrete set of points. It supports the
@@ -373,7 +372,7 @@ class DiscreteLowRankGaussianProcess[D: NDSpace, DDomain[DD] <: DiscreteDomain[D
    *   The resulting [[DiscreteLowRankGaussianProcess]] aligned on the provided instances of [[PointId]]
    */
   def realign(ids: IndexedSeq[PointId], withRotation: Boolean = true, diagonalize: Boolean = true)(implicit
-    vectorizer: Vectorizer[Value]
+    vectorizer: Vectorizer[Value], realignmentType: Realignment[D, DDomain, Value]
   ): DiscreteLowRankGaussianProcess[D, DDomain, Value] = {
     DiscreteLowRankGaussianProcess.realignment(this, ids, withRotation, diagonalize)
   }
@@ -669,47 +668,11 @@ object DiscreteLowRankGaussianProcess {
     ids: IndexedSeq[PointId],
     withRotation: Boolean,
     diagonalize: Boolean
-  )(implicit vectorizer: Vectorizer[Value]): DiscreteLowRankGaussianProcess[D, DDomain, Value] = {
-    model match
-      case m: DiscreteLowRankGaussianProcess[`_3D`, _, EuclideanVector[`_3D`]] =>
-        realignment3D(m, ids, withRotation, diagonalize)
-      case _ if !withRotation =>
-        // TODO general pure translation
-        throw new NotImplementedError("not yet implemented")
-      case _ =>
-        throw new NotImplementedError("not yet implemented")
+  )(implicit vectorizer: Vectorizer[Value], realignmentType: Realignment[D, DDomain, Value]): DiscreteLowRankGaussianProcess[D, DDomain, Value] = {
+    realignmentType.realign(model, ids, withRotation, diagonalize)
   }
 
-  private def realignment3D[DDomain[_3D] <: DiscreteDomain[_3D]](
-    model: DiscreteLowRankGaussianProcess[_3D, DDomain, EuclideanVector[_3D]],
-    ids: IndexedSeq[PointId],
-    withRotation: Boolean,
-    diagonalize: Boolean
-  ): DiscreteLowRankGaussianProcess[_3D, DDomain, EuclideanVector[_3D]] = {
-    // build the projection matrix for the desired pose
-    val p = {
-      val pt = breeze.linalg.tile(DenseMatrix.eye[Double](3), model.domain.pointSet.numberOfPoints, 1)
-      if withRotation then
-        val center = ids.map(id => model.domain.pointSet.point(id).toVector).reduce(_ + _).map(_ / ids.length).toPoint
-        val pr = getTangentialSpeedMatrix(model.domain, center)
-        DenseMatrix.horzcat(pt, pr)
-      else pt
-    }
-    // call the realignment implementation
-    val (nmean, nbasis, nvar) = realignmentComputation(model.meanVector,
-                                                       model.basisMatrix,
-                                                       model.variance,
-                                                       p,
-                                                       ids.map(_.id),
-                                                       dim = 3,
-                                                       diagonalize = diagonalize,
-                                                       projectMean = false
-    )
-
-    new DiscreteLowRankGaussianProcess[_3D, DDomain, EuclideanVector[_3D]](model.domain, nmean, nvar, nbasis)
-  }
-
-  private def realignmentComputation(mean: DenseVector[Double],
+  private[scalismo] def realignmentComputation(mean: DenseVector[Double],
                                      basis: DenseMatrix[Double],
                                      s: DenseVector[Double],
                                      p: DenseMatrix[Double],
@@ -741,39 +704,6 @@ object DiscreteLowRankGaussianProcess {
       else (alignedEigf, s)
 
     (alignedMean, newbasis, news)
-  }
-
-  private def getTangentialSpeedMatrix[D: NDSpace](domain: DiscreteDomain[D], center: Point[D]): DenseMatrix[Double] = {
-    val dim = center.dimensionality
-    val np = domain.pointSet.numberOfPoints
-    require(dim >= 2, "requires at least two dimensions to calculate a tangential speed")
-    // build centered data matrix
-    val x = DenseMatrix.zeros[Double](dim, np)
-    val c = center.toBreezeVector
-    for (p, i) <- domain.pointSet.points.zipWithIndex do x(::, i) := p.toBreezeVector - c
-
-    val pr = if dim == 3 then
-      val pr = DenseMatrix.zeros[Double](np * dim, 3)
-      // the derivative of the rotation matrix
-      val dr = new DenseMatrix[Double](9,
-                                       3,
-                                       Array(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0,
-                                             0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0)
-      )
-      // get tangential speed
-      val dx = dr * x
-      for i <- 0 until 3 do
-        val v = dx(3 * i until 3 * i + 3, ::).toDenseVector
-        pr(::, i) := v / breeze.linalg.norm(v)
-      pr
-    else if dim == 2 then
-      val dr = new DenseMatrix[Double](2, 2, Array(0.0, -1.0, 1.0, 0.0))
-      val dx = (dr * x).reshape(dim * np, 1)
-      val n = breeze.linalg.norm(dx, breeze.linalg.Axis._0)
-      dx / n(0)
-    else throw new NotImplementedError("tangential speed only implemented for 2d and 3d space")
-
-    pr
   }
 
 }
@@ -844,3 +774,192 @@ object DiscreteLowRankGraussianProcess3D {
     DiscreteLowRankGaussianProcess.apply[_3D, DDomain, Value](mean, klBasis)
   }
 }
+
+
+trait Realignment[D: NDSpace, DDomain[DD] <: DiscreteDomain[DD], Value] {
+  def realign(
+               model: DiscreteLowRankGaussianProcess[D, DDomain, Value],
+               ids: IndexedSeq[PointId],
+               withRotation: Boolean,
+               diagonalize: Boolean
+             )(implicit vectorizer: Vectorizer[Value]): DiscreteLowRankGaussianProcess[D, DDomain, Value] = {
+    val d = model.domain.pointSet.points.next().dimensionality  // TODO shorter expression
+    // build the projection matrix for the desired pose
+    val p = {
+      val pt = breeze.linalg.tile(DenseMatrix.eye[Double](d), model.domain.pointSet.numberOfPoints, 1)
+      if withRotation then
+        val center = ids.map(id => model.domain.pointSet.point(id).toVector).reduce(_ + _).map(_ / ids.length).toPoint
+        val pr = getTangentialSpeedMatrix(model.domain, center)
+        DenseMatrix.horzcat(pt, pr)
+      else pt
+    }
+    // call the realignment implementation
+    val (nmean, nbasis, nvar) = realignmentComputation(model.meanVector,
+                                  model.basisMatrix,
+                                  model.variance,
+                                  p,
+                                  ids.map(_.id),
+                                  dim = d,
+                                  diagonalize = diagonalize,
+                                  projectMean = false)
+
+    new DiscreteLowRankGaussianProcess[D, DDomain, Value](model.domain, nmean, nvar, nbasis)
+  }
+
+  def centeredP(domain: DiscreteDomain[D], center: Point[D]): DenseMatrix[Double] = {
+    val dim = center.dimensionality
+    val np = domain.pointSet.numberOfPoints
+    require(dim >= 2, "requires at least two dimensions to calculate a tangential speed")
+    // build centered data matrix
+    val x = DenseMatrix.zeros[Double](dim, np)
+    val c = center.toBreezeVector
+    for (p, i) <- domain.pointSet.points.zipWithIndex do x(::, i) := p.toBreezeVector - c
+    x
+  }
+
+  def getTangentialSpeedMatrix(domain: DDomain[D], center: Point[D]): DenseMatrix[Double]
+
+}
+
+given givenRealignment3D: Realignment[_3D, DiscreteDomain, EuclideanVector[_3D]] with
+  def getTangentialSpeedMatrix(domain: DiscreteDomain[_3D], center: Point[_3D]): DenseMatrix[Double] = {
+    val dim = center.dimensionality
+    val np = domain.pointSet.numberOfPoints
+    val x = centeredP(domain, center)
+
+    val pr = DenseMatrix.zeros[Double](np * dim, 3)
+    // the derivative of the rotation matrices
+    val dr = new DenseMatrix[Double](9, 3,
+      Array(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0,
+        0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0)
+    )
+    // get tangential speed
+    val dx = dr * x
+    for i <- 0 until 3 do
+      val v = dx(3 * i until 3 * i + 3, ::).toDenseVector
+      pr(::, i) := v / breeze.linalg.norm(v)
+    pr
+  }
+
+given givenRealignment2D: Realignment[_2D, DiscreteDomain, EuclideanVector[_2D]] with
+  def getTangentialSpeedMatrix(domain: DiscreteDomain[_2D], center: Point[_2D]): DenseMatrix[Double] = {
+    val dim = center.dimensionality
+    val np = domain.pointSet.numberOfPoints
+    val x = centeredP(domain, center)
+
+    //derivative of the rotation matrix
+    val dr = new DenseMatrix[Double](2, 2, Array(0.0, -1.0, 1.0, 0.0))
+    val dx = (dr * x).reshape(dim * np, 1)
+    val n = breeze.linalg.norm(dx, breeze.linalg.Axis._0)
+    dx / n(0)
+  }
+
+implicit object Realignment3D extends Realignment[_3D, DiscreteDomain, EuclideanVector[_3D]] {
+  override def getTangentialSpeedMatrix(domain: DiscreteDomain[_3D], center: Point[_3D]): DenseMatrix[Double] = {
+    val dim = center.dimensionality
+    val np = domain.pointSet.numberOfPoints
+    val x = centeredP(domain, center)
+
+    val pr = DenseMatrix.zeros[Double](np * dim, 3)
+    // the derivative of the rotation matrices
+    val dr = new DenseMatrix[Double](9, 3,
+      Array(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0,
+        0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0)
+    )
+    // get tangential speed
+    val dx = dr * x
+    for i <- 0 until 3 do
+      val v = dx(3 * i until 3 * i + 3, ::).toDenseVector
+      pr(::, i) := v / breeze.linalg.norm(v)
+    pr
+  }
+//  def realign(
+//               model: DiscreteLowRankGaussianProcess[_3D, DiscreteDomain, EuclideanVector[_3D]],
+//               ids: IndexedSeq[PointId],
+//               withRotation: Boolean,
+//               diagonalize: Boolean
+//             )(implicit vectorizer: Vectorizer[EuclideanVector[_3D]]): DiscreteLowRankGaussianProcess[_3D, DiscreteDomain, EuclideanVector[_3D]] = {
+//    // build the projection matrix for the desired pose
+//    val p = {
+//      val pt = breeze.linalg.tile(DenseMatrix.eye[Double](3), model.domain.pointSet.numberOfPoints, 1)
+//      if withRotation then
+//        val center = ids.map(id => model.domain.pointSet.point(id).toVector).reduce(_ + _).map(_ / ids.length).toPoint
+//        val pr = getTangentialSpeedMatrix(model.domain, center)
+//        DenseMatrix.horzcat(pt, pr)
+//      else pt
+//    }
+//    // call the realignment implementation
+//    val (nmean, nbasis, nvar) = realignmentComputation(model.meanVector,
+//      model.basisMatrix,
+//      model.variance,
+//      p,
+//      ids.map(_.id),
+//      dim = 3,
+//      diagonalize = diagonalize,
+//      projectMean = false
+//    )
+//
+//    new DiscreteLowRankGaussianProcess[_3D, DiscreteDomain, EuclideanVector[_3D]](model.domain, nmean, nvar, nbasis)
+//  }
+
+
+}
+
+
+implicit object Realignment2D extends Realignment[_2D, DiscreteDomain, EuclideanVector[_2D]] {
+
+  override def getTangentialSpeedMatrix(domain: DiscreteDomain[_2D], center: Point[_2D]): DenseMatrix[Double] = {
+    val dim = center.dimensionality
+    val np = domain.pointSet.numberOfPoints
+    val x = centeredP(domain, center)
+
+    //derivative of the rotation matrix
+    val dr = new DenseMatrix[Double](2, 2, Array(0.0, -1.0, 1.0, 0.0))
+    val dx = (dr * x).reshape(dim * np, 1)
+    val n = breeze.linalg.norm(dx, breeze.linalg.Axis._0)
+    dx / n(0)
+  }
+//  def realign(
+//               model: DiscreteLowRankGaussianProcess[_2D, DiscreteDomain, EuclideanVector[_2D]],
+//               ids: IndexedSeq[PointId],
+//               withRotation: Boolean,
+//               diagonalize: Boolean
+//             )(implicit vectorizer: Vectorizer[EuclideanVector[_2D]]): DiscreteLowRankGaussianProcess[_2D, DiscreteDomain, EuclideanVector[_2D]] = {
+//    // build the projection matrix for the desired pose
+//    val p = {
+//      val pt = breeze.linalg.tile(DenseMatrix.eye[Double](3), model.domain.pointSet.numberOfPoints, 1)
+//      if withRotation then
+//        val center = ids.map(id => model.domain.pointSet.point(id).toVector).reduce(_ + _).map(_ / ids.length).toPoint
+//        val pr = getTangentialSpeedMatrix(model.domain, center)
+//        DenseMatrix.horzcat(pt, pr)
+//      else pt
+//    }
+//    // call the realignment implementation
+//    val (nmean, nbasis, nvar) = realignmentComputation(model.meanVector,
+//      model.basisMatrix,
+//      model.variance,
+//      p,
+//      ids.map(_.id),
+//      dim = 3,
+//      diagonalize = diagonalize,
+//      projectMean = false
+//    )
+//
+//    new DiscreteLowRankGaussianProcess[_3D, DiscreteDomain, EuclideanVector[_3D]](model.domain, nmean, nvar, nbasis)
+//  }
+}
+
+
+extension(model: DiscreteLowRankGaussianProcess[_3D, DiscreteDomain, EuclideanVector[_3D]])
+  def realign2D(ids: IndexedSeq[PointId], withRotation: Boolean = true, diagonalize: Boolean = true): DiscreteLowRankGaussianProcess[_3D, DiscreteDomain, EuclideanVector[_3D]] = {
+    Realignment3D.realign(model, ids, withRotation, diagonalize)
+  }
+
+extension(model: DiscreteLowRankGaussianProcess[_2D, DiscreteDomain, EuclideanVector[_2D]])
+  def realign3D(ids: IndexedSeq[PointId], withRotation: Boolean = true, diagonalize: Boolean = true): DiscreteLowRankGaussianProcess[_2D, DiscreteDomain, EuclideanVector[_2D]] = {
+    Realignment2D.realign(model, ids, withRotation, diagonalize)
+  }
+
+
+
+
