@@ -1,8 +1,8 @@
-package scalismo.common
+package scalismo.statisticalmodel
 
 import breeze.linalg.DenseMatrix
-import scalismo.geometry.{_2D, _3D, EuclideanVector, NDSpace, Point}
-import scalismo.statisticalmodel.DiscreteLowRankGaussianProcess
+import scalismo.common.DiscreteDomain
+import scalismo.geometry.*
 
 /**
  * types the whole discrete low rank gp to make sure that it is applied to the appropriate models. The value type could
