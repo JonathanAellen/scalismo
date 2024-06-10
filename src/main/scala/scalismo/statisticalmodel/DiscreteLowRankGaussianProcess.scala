@@ -677,7 +677,7 @@ object DiscreteLowRankGaussianProcess {
     vectorizer: Vectorizer[Value],
     realigning: RealignExtendedBasis[D, Value]
   ): DiscreteLowRankGaussianProcess[D, DDomain, Value] = {
-    val d = model.domain.pointSet.point(ids.head).dimensionality
+    val d = NDSpace.apply[D].dimensionality
     // build the projection matrix for the desired pose
     val p = {
       @threadUnsafe
