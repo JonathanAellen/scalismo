@@ -509,12 +509,6 @@ object DiscreteLowRankGaussianProcess {
     new DiscreteLowRankGaussianProcess[D, DDomain, Value](domain, meanVec, varianceVec, basisMat)
   }
 
-  def unapply[D: NDSpace, DDomain[D] <: DiscreteDomain[D], Value](
-    dgp: DiscreteLowRankGaussianProcess[D, DDomain, Value]
-  ): Option[(DiscreteDomain[D], DenseVector[Double], DenseMatrix[Double], DenseVector[Double])] = {
-    Option(dgp.domain, dgp.meanVector, dgp.basisMatrix, dgp.variance)
-  }
-
   /**
    * Discrete implementation of [[LowRankGaussianProcess.regression]]
    */

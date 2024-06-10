@@ -8,7 +8,7 @@ import scalismo.geometry.*
  * types the whole discrete low rank gp to make sure that it is applied to the appropriate models. The value type could
  * be left out if the user knows what to do.
  */
-trait RealignExtendedBasis[D: NDSpace, Value]:
+trait RealignExtendedBasis[D, Value]:
 
   def useTranslation: Boolean
   def getBasis[DDomain[DD] <: DiscreteDomain[DD]](model: DiscreteLowRankGaussianProcess[D, DDomain, Value],
