@@ -729,7 +729,7 @@ class GaussianProcessTests extends ScalismoTestSuite {
         val f = Fixture
         val dgp = f.discreteLowRankGp
 
-        val alignedDgp = dgp.realign(dgp.mean.pointsWithIds.map(t => t._2).toIndexedSeq, withRotation = true)
+        val alignedDgp = dgp.realign(dgp.mean.pointsWithIds.map(t => t._2).toIndexedSeq)
 
         val shifts: IndexedSeq[Double] = alignedDgp.klBasis
           .map(klp => {
@@ -769,7 +769,7 @@ class GaussianProcessTests extends ScalismoTestSuite {
           })
           rotations.map(m => m.data.map(math.abs).sum).sum
         })
-        res(1) shouldBe <(res(0) * 0.9)
+        res(1) shouldBe <(res(0) * 0.6)
       }
     }
   }

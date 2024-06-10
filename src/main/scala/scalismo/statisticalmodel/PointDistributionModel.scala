@@ -260,11 +260,11 @@ case class PointDistributionModel[D: NDSpace, DDomain[D] <: DiscreteDomain[D]](
   /**
    * realigns the [[DiscreteLowRankGaussianProcess]] and returns the resulting [[PointDistributionModel]]
    */
-  def realign(ids: IndexedSeq[PointId],
-              withRotation: Boolean = true,
-              diagonalize: Boolean = true
+  def realign(ids: IndexedSeq[PointId], withExtendedBasis: Boolean = true, diagonalize: Boolean = true)(using
+    vectorizer: Vectorizer[EuclideanVector[D]],
+    realign: RealignExtendedBasis[D, EuclideanVector[D]]
   ): PointDistributionModel[D, DDomain] = {
-    new PointDistributionModel[D, DDomain](this.gp.realign(ids, withRotation, diagonalize))
+    new PointDistributionModel[D, DDomain](this.gp.realign(ids, withExtendedBasis, diagonalize))
   }
 
 }
