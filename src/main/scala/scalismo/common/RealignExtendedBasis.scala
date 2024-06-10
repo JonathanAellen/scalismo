@@ -1,7 +1,7 @@
 package scalismo.common
 
 import breeze.linalg.DenseMatrix
-import scalismo.geometry.{EuclideanVector, NDSpace, Point, _2D, _3D}
+import scalismo.geometry.{_2D, _3D, EuclideanVector, NDSpace, Point}
 import scalismo.statisticalmodel.DiscreteLowRankGaussianProcess
 
 /**
@@ -11,7 +11,9 @@ import scalismo.statisticalmodel.DiscreteLowRankGaussianProcess
 trait RealignExtendedBasis[D: NDSpace, Value]:
 
   def useTranslation: Boolean
-  def getBasis[DDomain[DD] <: DiscreteDomain[DD]](model: DiscreteLowRankGaussianProcess[D, DDomain, Value], center: Point[D]): DenseMatrix[Double]
+  def getBasis[DDomain[DD] <: DiscreteDomain[DD]](model: DiscreteLowRankGaussianProcess[D, DDomain, Value],
+                                                  center: Point[D]
+  ): DenseMatrix[Double]
   def centeredP[DDomain[DD] <: DiscreteDomain[DD]](domain: DDomain[D], center: Point[D]): DenseMatrix[Double] = {
     // build centered data matrix
     val x = DenseMatrix.zeros[Double](center.dimensionality, domain.pointSet.numberOfPoints)
@@ -27,15 +29,19 @@ object RealignExtendedBasis:
    */
   given realignBasis3D: RealignExtendedBasis[_3D, EuclideanVector[_3D]] with
     def useTranslation: Boolean = true
-    def getBasis[DDomain[DD] <: DiscreteDomain[DD]](model: DiscreteLowRankGaussianProcess[_3D, DDomain, EuclideanVector[_3D]], center: Point[_3D]): DenseMatrix[Double] = {
+    def getBasis[DDomain[DD] <: DiscreteDomain[DD]](
+      model: DiscreteLowRankGaussianProcess[_3D, DDomain, EuclideanVector[_3D]],
+      center: Point[_3D]
+    ): DenseMatrix[Double] = {
       val np = model.domain.pointSet.numberOfPoints
       val x = centeredP(model.domain, center)
 
       val pr = DenseMatrix.zeros[Double](np * 3, 3)
       // the derivative of the rotation matrices
-      val dr = new DenseMatrix[Double](9, 3,
-        Array(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0,
-          0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0)
+      val dr = new DenseMatrix[Double](9,
+                                       3,
+                                       Array(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0,
+                                             0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0)
       )
       // get tangential speed
       val dx = dr * x
@@ -50,16 +56,16 @@ object RealignExtendedBasis:
    */
   given realignBasis2D: RealignExtendedBasis[_2D, EuclideanVector[_2D]] with
     def useTranslation: Boolean = true
-    def getBasis[DDomain[DD] <: DiscreteDomain[DD]](model: DiscreteLowRankGaussianProcess[_2D, DDomain, EuclideanVector[_2D]], center: Point[_2D]): DenseMatrix[Double] = {
+    def getBasis[DDomain[DD] <: DiscreteDomain[DD]](
+      model: DiscreteLowRankGaussianProcess[_2D, DDomain, EuclideanVector[_2D]],
+      center: Point[_2D]
+    ): DenseMatrix[Double] = {
       val np = model.domain.pointSet.numberOfPoints
       val x = centeredP(model.domain, center)
 
-      //derivative of the rotation matrix
+      // derivative of the rotation matrix
       val dr = new DenseMatrix[Double](2, 2, Array(0.0, -1.0, 1.0, 0.0))
       val dx = (dr * x).reshape(2 * np, 1)
       val n = breeze.linalg.norm(dx, breeze.linalg.Axis._0)
       dx / n(0)
     }
-
-
-
