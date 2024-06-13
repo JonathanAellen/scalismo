@@ -4,10 +4,6 @@ import breeze.linalg.DenseMatrix
 import scalismo.common.DiscreteDomain
 import scalismo.geometry.*
 
-/**
- * types the whole discrete low rank gp to make sure that it is applied to the appropriate models. The value type could
- * be left out if the user knows what to do.
- */
 trait RealignExtendedBasis[D, Value]:
 
   def useTranslation: Boolean

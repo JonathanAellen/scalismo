@@ -360,18 +360,22 @@ class DiscreteLowRankGaussianProcess[D: NDSpace, DDomain[DD] <: DiscreteDomain[D
   }
 
   /**
-   * realigns the model on the provided part of the domain. By default aligns over the translation and approximately
-   * over rotation as well. The rotation will always be calculated around the center of the provided ids. Rotations are
-   * around the cardinal directions.
+   * realigns the model on the provided part of the domain. Aligns over the translation and, when using
+   * withExtendedBasis = true, over the extended basis (the default implicit [[RealignExtendedBasis]] adds rotation.
+   * This rotation will always be calculated around the center of the provided ids. Rotations are around the cardinal
+   * directions.).
    *
    * @param ids
    *   these define the parts of the domain that are aligned to. Depending on the withExtendedBasis parameter has a
-   *   minimum requirements (default basis extension in 3D should be used with >=4 provided ids)
+   *   minimum length requirements (default basis extension in 3D should be used with >=4 provided ids)
    * @param withExtendedBasis
-   *   True if the extended basis should be included. By default this uses a rotation extension. that means False makes
-   *   the realignment over translation exact.
+   *   True if the extended basis should be included. By default this uses a rotation extension. False makes the
+   *   realignment only over translation. Translational alignment can be done exactly.
    * @param diagonalize
-   *   True if a diagonal basis should be returned. False is cheaper for exclusively drawing samples.
+   *   True if a diagonal basis should be returned. In general, it is strongly recommended to use a diagonal basis. This
+   *   option can be set to false if the resulting model is only sampled from (for example [[sample]] or [[instance]]).
+   *   This makes the same coefficient lead to very similar shapes in the pre- and after realignment model (or exactly
+   *   the same shapes if withExtendedBasis = false).
    * @return
    *   The resulting [[DiscreteLowRankGaussianProcess]] aligned on the provided instances of [[PointId]]
    */
