@@ -372,12 +372,15 @@ class DiscreteLowRankGaussianProcess[D: NDSpace, DDomain[DD] <: DiscreteDomain[D
    *   True if the extended basis should be included. By default this uses a rotation extension. False makes the
    *   realignment only over translation. Translational alignment can be done exactly.
    * @param diagonalize
-   *   True if a diagonal basis should be returned. In general, it is strongly recommended to use a diagonal basis. This
-   *   option can be set to false if the resulting model is only sampled from (for example [[sample]] or [[instance]]).
-   *   This makes the same coefficient lead to very similar shapes in the pre- and after realignment model (or exactly
-   *   the same shapes if withExtendedBasis = false).
+   *   True if a diagonal basis should be returned. In general, it is strongly recommended to use a orthonormal basis -
+   *   here referred to as diagonal. This is not increase complexity and is a more intuitive formulation of the model.
+   *   If internal fields are accessed diagonalize should be set to true. This option can be set to false to make the
+   *   same coefficient lead to very similar shapes in the pre- and after realignment model (or exactly the same shapes
+   *   if withExtendedBasis = false).
    * @return
-   *   The resulting [[DiscreteLowRankGaussianProcess]] aligned on the provided instances of [[PointId]]
+   *   The resulting [[DiscreteLowRankGaussianProcess]] aligned on the provided instances of [[PointId]]. If
+   *   withExtendedBasis = false then the original and the returned model can produce the same mesh with different
+   *   translations. That means the shape spaces are the same but the fieldsa are translated.
    */
   def realign(ids: IndexedSeq[PointId], withExtendedBasis: Boolean = true, diagonalize: Boolean = true)(using
     vectorizer: Vectorizer[Value],
