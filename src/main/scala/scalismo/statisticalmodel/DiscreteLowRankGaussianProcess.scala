@@ -367,13 +367,14 @@ class DiscreteLowRankGaussianProcess[D: NDSpace, DDomain[DD] <: DiscreteDomain[D
    *
    * @param ids
    *   these define the parts of the domain that are aligned to. Depending on the withExtendedBasis parameter has a
-   *   minimum length requirements (default basis extension in 3D should be used with >=4 provided ids)
+   *   minimum length requirements (default basis extension in 3D should be used with >=4 provided ids for example)
    * @param withExtendedBasis
    *   True if the extended basis should be included. By default this uses a rotation extension. False makes the
-   *   realignment only over translation. Translational alignment can be done exactly.
+   *   realignment only over translation. Translational alignment can be done exactly. For more information see
+   *   [[RealignExtendedBasis]].
    * @param diagonalize
    *   True if a diagonal basis should be returned. In general, it is strongly recommended to use a orthonormal basis -
-   *   here referred to as diagonal. This is not increase complexity and is a more intuitive formulation of the model.
+   *   here referred to as diagonal. This does not increase complexity and is a more intuitive formulation of the model.
    *   If internal fields are accessed diagonalize should be set to true. This option can be set to false to make the
    *   same coefficient lead to very similar shapes in the pre- and after realignment model (or exactly the same shapes
    *   if withExtendedBasis = false).

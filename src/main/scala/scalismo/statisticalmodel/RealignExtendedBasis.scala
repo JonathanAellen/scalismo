@@ -13,13 +13,13 @@ trait RealignExtendedBasis[D, Value]:
 
   /**
    * whether or not the default translation basis should also be used. that means false does not perform a translation
-   * realignment.
+   * realignment. This in combination with getBasis allows for complete control of the projection matrix.
    */
   def useTranslation: Boolean
 
   /**
-   * basis to span the kernel of the projection. as example, a translation alignment here could span that space with
-   * constant vectors for each cardinal direction.
+   * basis to span the kernel of the projection. for example, a translation alignment could be performed by spanning
+   * that space with constant vectors for each cardinal direction.
    */
   def getBasis[DDomain[DD] <: DiscreteDomain[DD]](model: DiscreteLowRankGaussianProcess[D, DDomain, Value],
                                                   center: Point[D]
@@ -41,7 +41,7 @@ trait RealignExtendedBasisRotation[D, Value] extends RealignExtendedBasis[D, Val
 
 object RealignExtendedBasis:
   /**
-   * returns a projection basis for rotation. that is the tangential speed for the rotations around the three cardinal
+   * returns a projection basis for rotation - the tangential speed for the rotations around the three cardinal
    * directions.
    */
   given realignBasis3D: RealignExtendedBasisRotation[_3D, EuclideanVector[_3D]] with
@@ -69,7 +69,7 @@ object RealignExtendedBasis:
     }
 
   /**
-   * returns a projection basis for rotation. that is the tangential speed for the single 2d rotation.
+   * returns a projection basis for rotation - the tangential speed for the single 2d rotation.
    */
   given realignBasis2D: RealignExtendedBasisRotation[_2D, EuclideanVector[_2D]] with
     def useTranslation: Boolean = true
